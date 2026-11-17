@@ -22,16 +22,43 @@ Mensaje máximo: 300 caracteres. Si llegan varios avisos, se encolan.
 
 ## Línea de tiempo de la animación (14.5 s)
 
-- 0.0 s – 7.3 s: **musiquita de fondo** (arpegio que sube de grave a agudo) y fuegos artificiales de intro, cada vez más seguidos. Cada tanda de fuegos suena con una **nota de "carga"** que también sube de grave a agudo.
-- 7.5 s: explosión + destello del color del tipo + **"tan tan tan taaan"** electrónico (3 golpes y uno largo)
-- 8.5 s: sube el fuego de pantalla (textura `fire_1.png` recoloreada) y aparece un **difuminado sutil del color del aviso en el borde de la pantalla**
-- 9.2 s: el mensaje aparece en el chat con una **notificación retro** de 3 notas (~1 s)
-- ~19 s: el borde se desvanece cuando el chat oculta el mensaje
+- **0 s – 7.3 s:** música de fondo que crece de grave a agudo y fuegos artificiales cada vez más seguidos. Cada tanda suena con una **nota de "carga"** que sube de grave a agudo.
+- **7.5 s:** explosión grande + destello del color del tipo + **remate sonoro propio de cada tipo de aviso** (máx. 3 s).
+- **8.5 s:** sube el fuego de pantalla y aparece un **difuminado del color del aviso en el borde de la pantalla** (con un leve "latido").
+- **9.2 s:** sonido de mensaje, el texto sale en el chat y aparece un **título grande en pantalla** (tipo de aviso + mensaje) durante 6 s.
+- **~19 s:** el borde se desvanece cuando el chat oculta el mensaje.
+
+### Remate de cada tipo (todos distintos)
+
+| tipo | sonido |
+|---|---|
+| `info` | fanfarria brillante y alegre de campanitas |
+| `dificultad` | tensión creciente con latidos y un gong grave |
+| `mob` | "chan, chan, chan, chaaan": 4 golpes graves descendentes |
+| `jugador` | intriga: pizzicato misterioso con nota aguda inquietante |
+| `mision` | notificación de campanas tipo "misión aceptada" |
+| `expedicion` | redoble de timbales que se acelera y fanfarria de metales |
+| `final` | impacto épico con coro, metales y campanas |
+
+## Sonidos
+
+Todos los sonidos son **originales y propios del mod** (no son de Minecraft): están en
+`src/main/resources/assets/desafioalert/sounds/` y se registran en `sounds.json`.
+Se generan con un script de Python, así que se pueden modificar y volver a crear:
+
+```
+pip install numpy scipy        # y tener ffmpeg instalado
+python3 tools/generate_sounds.py            # genera todos
+python3 tools/generate_sounds.py boom msg   # solo los que contengan esas palabras
+```
+
+Cada sonido se puede cambiar desde la config del servidor por cualquier otro id
+(`minecraft:...` o de otro mod/resource pack).
 
 ## Configuración
 
-- **Servidor/común** (`desafioalert-common.toml`): invencibilidad del aviso `final` (segundos y retraso) y, por cada uno de los 9 sonidos (`chispas`, `explosion`, `explosion_capa2`, `fuego`, `notificacion`, `carga`, `musica`, `suspenso_golpe`, `suspenso_largo`), el id del sonido y su volumen.
-- **Cliente** (`desafioalert-client.toml`): `tamanoFuego` (A/B/C/D), `alturaFuego`, `bajarFuego`, `volumen` general y `bordeIntensidad` (0 = sin borde, 0.25 = sutil).
+- **Servidor/común** (`desafioalert-common.toml`): invencibilidad del aviso `final` (`invencibleSegundos`, `retrasoSegundos`) y, por cada uno de los 14 sonidos, su id y volumen: `fuegos_artificiales`, `explosion_grande`, `explosion_destellos`, `fuego_pantalla`, `mensaje_chat`, `notas_carga`, `musica_fondo` y un `remate_<tipo>` por cada tipo.
+- **Cliente** (`desafioalert-client.toml`): `tamanoFuego` (A/B/C/D), `alturaFuego`, `bajarFuego`, `volumen` general, `bordeIntensidad` (0 = sin borde, 0.25 = sutil) y `mostrarTitulo`.
 
 ## Estructura del código
 
@@ -46,8 +73,10 @@ com.desafioalert
 │   ├── Anim          genera comandos de dibujo en cada instante
 │   ├── Layout        distribuciones A/B/C/D del fuego
 │   └── Tint          recoloreo HSV de la textura de fuego
-├── client/           ClientAnim (cola, sonidos, dibujo), FireTextures, eventos
+├── client/           ClientAnim (cola, sonidos, dibujo, borde, titulo), FireTextures, eventos
 └── net/              AlertPacket + NetworkHandler
+
+tools/                generador de sonidos (Python)
 ```
 
 ## Compilar

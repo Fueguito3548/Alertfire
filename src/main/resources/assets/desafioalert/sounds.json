@@ -1,0 +1,23 @@
+{
+  "firework": {
+    "sounds": [
+      "desafioalert:firework_1",
+      "desafioalert:firework_2",
+      "desafioalert:firework_3",
+      "desafioalert:firework_4"
+    ]
+  },
+  "charge": { "sounds": ["desafioalert:charge"] },
+  "boom": { "sounds": ["desafioalert:boom"] },
+  "sparkle_blast": { "sounds": ["desafioalert:sparkle_blast"] },
+  "fire": { "sounds": ["desafioalert:fire"] },
+  "message": { "sounds": ["desafioalert:message"] },
+  "music": { "sounds": ["desafioalert:music"] },
+  "final_info": { "sounds": ["desafioalert:final_info"] },
+  "final_dificultad": { "sounds": ["desafioalert:final_dificultad"] },
+  "final_mob": { "sounds": ["desafioalert:final_mob"] },
+  "final_jugador": { "sounds": ["desafioalert:final_jugador"] },
+  "final_mision": { "sounds": ["desafioalert:final_mision"] },
+  "final_expedicion": { "sounds": ["desafioalert:final_expedicion"] },
+  "final_final": { "sounds": ["desafioalert:final_final"] }
+}

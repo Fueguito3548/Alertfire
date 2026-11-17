@@ -61,18 +61,14 @@ public final class Anim {
         BOOM,
         /** Aparece el fuego de pantalla (y el borde de color). */
         FIRE,
-        /** Sale el mensaje en el chat (primera nota de la notificacion). */
+        /** Sale el mensaje en el chat (y el titulo en pantalla). */
         MESSAGE,
-        /** Nota de "carga": una por cada tanda de fuegos artificiales, de grave a aguda. */
+        /** Nota de "carga": una por cada tanda de fuegos artificiales, de grave a agudo. */
         CHARGE,
-        /** Nota de la musiquita de fondo. */
+        /** Arranca la musica de fondo (una pista que dura toda la animacion). */
         MUSIC,
-        /** Golpe corto del "tan tan tan taaan". */
-        HIT,
-        /** El "taaan" largo y electronico. */
-        LONG,
-        /** Notas siguientes de la notificacion retro. */
-        BLIP
+        /** Remate sonoro propio de cada tipo de aviso, junto a la explosion final. */
+        STINGER
     }
 
     /** Momento (en segundos) en el que debe sonar un sonido o salir el mensaje. */
@@ -175,29 +171,12 @@ public final class Anim {
         cues.add(new Cue(8.5f, CueKind.FIRE));
         cues.add(new Cue(9.2f, CueKind.MESSAGE));
 
-        // "Tan tan tan taaan": tres golpes electronicos y uno largo, al salir la explosion final.
-        cues.add(new Cue(7.5f, CueKind.HIT, 0.63f, 1f));
-        cues.add(new Cue(7.78f, CueKind.HIT, 0.63f, 1f));
-        cues.add(new Cue(8.06f, CueKind.HIT, 0.63f, 1f));
-        cues.add(new Cue(8.34f, CueKind.LONG, 0.5f, 1f));
+        // Remate sonoro propio del tipo de aviso (dura 3 s como maximo) junto a la explosion.
+        cues.add(new Cue(7.5f, CueKind.STINGER));
 
-        // Notificacion retro (3 notas subiendo, ~1 s) cuando sale el mensaje.
-        cues.add(new Cue(9.3f, CueKind.BLIP, 1.498f, 1f));
-        cues.add(new Cue(9.4f, CueKind.BLIP, 2.0f, 1f));
-
-        // Musiquita de fondo. Intro: arpegio que sube de grave a agudo (sensacion de "cargando").
-        int[] arp = {0, 2, 4, 2};
-        int beat = 0;
-        for (float mt = 0f; mt < 7.3f; mt += 0.2f) {
-            int base = (int) (mt / 7.3f * 10f);
-            cues.add(new Cue(mt, CueKind.MUSIC, notePitch(base + arp[beat % 4]), 1f));
-            beat++;
-        }
-        // Despues de la explosion: notas agudas mas calmadas que se van apagando.
-        int[] calm = {14, 11, 9, 11};
-        for (int i = 0; i < 12; i++) {
-            cues.add(new Cue(8.0f + i * 0.45f, CueKind.MUSIC, notePitch(calm[i % 4]), 0.8f * (1f - i / 12f)));
-        }
+        // Musica de fondo: una sola pista de 14.5 s sincronizada con la animacion
+        // (crece de grave a agudo hasta la explosion y luego se calma).
+        cues.add(new Cue(0.0f, CueKind.MUSIC));
         Collections.sort(cues);
 
         // Brasas que suben desde el fuego.

@@ -14,7 +14,9 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.List;
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -23,6 +25,7 @@ import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.util.FormattedCharSequence;
 import org.joml.Matrix4f;
 
 /**
@@ -125,12 +128,33 @@ public final class ClientAnim {
     private static final float GLOW_SECONDS = 10.7f;
     private static final float GLOW_FADE_IN = 1.0f;
     private static final float GLOW_FADE_OUT = 1.2f;
-    private static final int GLOW_STRIPS = 20;
+    /** Cantidad de marcos concentricos del difuminado (mas = mas suave). */
+    private static final int GLOW_STRIPS = 28;
+    /** Grosor del borde como fraccion del lado menor de la pantalla. */
+    private static final float GLOW_THICKNESS = 0.24f;
+
+    /** Titulo grande en pantalla: aparece junto al mensaje del chat. */
+    private static final class Title {
+        final AlertType type;
+        final String message;
+        final long startNanos;
+
+        Title(AlertType type, String message) {
+            this.type = type;
+            this.message = message;
+            this.startNanos = System.nanoTime();
+        }
+    }
+
+    private static final float TITLE_SECONDS = 6.0f;
+    private static final float TITLE_FADE_IN = 0.45f;
+    private static final float TITLE_FADE_OUT = 0.9f;
 
     private static final ArrayDeque<Pending> QUEUE = new ArrayDeque<>();
     private static final Commands COMMANDS = new Commands();
     private static Active active;
     private static Glow glow;
+    private static Title title;
 
     private ClientAnim() {
     }
@@ -180,6 +204,7 @@ public final class ClientAnim {
         if (mc.player == null) {
             active = null;
             glow = null;
+            title = null;
             QUEUE.clear();
             return;
         }
@@ -200,38 +225,43 @@ public final class ClientAnim {
         }
     }
 
+    /** Posicion de cada sonido en la config / el paquete (ver AlertConfig). */
+    private static final int S_FIREWORK = 0;
+    private static final int S_BOOM = 1;
+    private static final int S_SPARKLE = 2;
+    private static final int S_FIRE = 3;
+    private static final int S_MESSAGE = 4;
+    private static final int S_CHARGE = 5;
+    private static final int S_MUSIC = 6;
+
     private static void play(Active a, Anim.Cue cue, int index) {
         Minecraft mc = Minecraft.getInstance();
         switch (cue.kind) {
             case SPARK:
-                // Tono ligeramente distinto en cada chispa
-                sound(a, 0, 0.8f + 0.1f * (float) ((index * 37) % 7), 1f);
+                // Cada explosion suena un poco distinta (ademas de las 4 variantes del sonido)
+                sound(a, S_FIREWORK, 0.85f + 0.06f * (float) ((index * 37) % 7), 1f);
                 break;
             case CHARGE:
-                sound(a, 5, cue.pitch, cue.gain);
+                sound(a, S_CHARGE, cue.pitch, cue.gain);
                 break;
             case MUSIC:
-                sound(a, 6, cue.pitch, cue.gain);
+                sound(a, S_MUSIC, 1f, 1f);
                 break;
             case BOOM:
-                sound(a, 1, a.type.pitch + 0.4f, 1f);
-                sound(a, 2, a.type.pitch + 0.2f, 1f);
+                sound(a, S_BOOM, 1f, 1f);
+                sound(a, S_SPARKLE, 1f, 1f);
                 break;
-            case HIT:
-                sound(a, 7, cue.pitch, cue.gain);
-                break;
-            case LONG:
-                sound(a, 8, cue.pitch, cue.gain);
+            case STINGER:
+                // Cada tipo de aviso tiene su propio remate
+                sound(a, AlertConfig.BASE_SOUNDS + a.type.ordinal(), 1f, 1f);
                 break;
             case FIRE:
-                sound(a, 3, a.type.pitch, 1f);
+                sound(a, S_FIRE, 1f, 1f);
                 glow = new Glow(a.type);
                 break;
-            case BLIP:
-                sound(a, 4, cue.pitch, cue.gain);
-                break;
             case MESSAGE:
-                sound(a, 4, cue.pitch, cue.gain);
+                sound(a, S_MESSAGE, 1f, 1f);
+                title = new Title(a.type, a.message);
                 Style style = Style.EMPTY.withColor(a.type.rgb);
                 MutableComponent line = Component.literal("[" + a.type.label + "] ")
                         .setStyle(style.withBold(true))
@@ -276,8 +306,10 @@ public final class ClientAnim {
         }
         float env = Math.min(Math.min(1f, u / GLOW_FADE_IN), Math.min(1f, (GLOW_SECONDS - u) / GLOW_FADE_OUT));
         env = env * env * (3f - 2f * env);
+        // Leve "latido" para que el borde se sienta vivo
+        env *= 0.86f + 0.14f * (float) Math.sin((double) u * 2.6);
 
-        int band = Math.max(GLOW_STRIPS, Math.round(Math.min(width, height) * 0.14f));
+        int band = Math.max(GLOW_STRIPS, Math.round(Math.min(width, height) * GLOW_THICKNESS));
         int s = Math.max(1, band / GLOW_STRIPS);
         for (int i = 0; i < GLOW_STRIPS; i++) {
             float fall = 1f - (float) i / (float) GLOW_STRIPS;
@@ -313,6 +345,7 @@ public final class ClientAnim {
             }
         }
         if (COMMANDS.count == 0) {
+            drawTitle(graphics, width, height);
             return;
         }
 
@@ -344,6 +377,67 @@ public final class ClientAnim {
             }
         }
         RenderSystem.disableBlend();
+        drawTitle(graphics, width, height);
+    }
+
+    /** Titulo grande (tipo de aviso + mensaje) con aparicion suave, en la parte alta de la pantalla. */
+    private static void drawTitle(GuiGraphics graphics, int width, int height) {
+        Title t = title;
+        if (t == null) {
+            return;
+        }
+        if (!AlertConfig.SHOW_TITLE.get()) {
+            title = null;
+            return;
+        }
+        float u = (float) ((double) (System.nanoTime() - t.startNanos) / 1.0E9);
+        if (u > TITLE_SECONDS) {
+            title = null;
+            return;
+        }
+        float in = Math.min(1f, u / TITLE_FADE_IN);
+        float out = Math.min(1f, (TITLE_SECONDS - u) / TITLE_FADE_OUT);
+        int alpha = Math.round(255f * Math.min(in, out));
+        if (alpha < 8) {
+            return;
+        }
+        int colored = (alpha << 24) | t.type.rgb;
+        int white = (alpha << 24) | 0xFFFFFF;
+
+        Font font = Minecraft.getInstance().font;
+        float slide = (1f - in) * -12f;
+        PoseStack pose = graphics.pose();
+        pose.pushPose();
+        pose.translate((float) width / 2f, (float) height * 0.14f + slide, 0f);
+
+        // Nombre del tipo de aviso, grande y en negrita
+        Component label = Component.literal(t.type.label).setStyle(Style.EMPTY.withBold(true));
+        float labelScale = 2.6f;
+        int labelW = font.width(label);
+        pose.pushPose();
+        pose.scale(labelScale, labelScale, 1f);
+        graphics.drawString(font, label, -labelW / 2, 0, colored, true);
+        pose.popPose();
+
+        // Linea decorativa bajo el titulo
+        int barHalf = Math.round((float) labelW * labelScale / 2f) + 12;
+        int barY = Math.round(9f * labelScale) + 6;
+        graphics.fill(-barHalf, barY, barHalf, barY + 2, colored);
+
+        // Mensaje, con salto de linea automatico
+        float textScale = 1.4f;
+        int maxW = Math.round((float) width * 0.62f / textScale);
+        java.util.List<FormattedCharSequence> lines = font.split(Component.literal(t.message), maxW);
+        pose.pushPose();
+        pose.translate(0f, (float) barY + 10f, 0f);
+        pose.scale(textScale, textScale, 1f);
+        for (int i = 0; i < lines.size(); i++) {
+            FormattedCharSequence line = lines.get(i);
+            graphics.drawString(font, line, -font.width(line) / 2, i * 11, white, true);
+        }
+        pose.popPose();
+
+        pose.popPose();
     }
 
     private static void drawRects(GuiGraphics graphics, int[] data, int from, int to) {
