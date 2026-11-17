@@ -4,7 +4,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
 
 public final class AlertConfig {
     /** Cantidad de sonidos configurables de la animacion. */
-    public static final int SOUND_COUNT = 5;
+    public static final int SOUND_COUNT = 9;
 
     // ---------------------------------------------------------------- COMMON (servidor)
     public static final ForgeConfigSpec COMMON_SPEC;
@@ -12,15 +12,33 @@ public final class AlertConfig {
     public static final ForgeConfigSpec.DoubleValue FINAL_INVINCIBLE_DELAY;
 
     /** Claves de cada sonido en el archivo de config (mismo orden que las listas de abajo). */
-    public static final String[] SOUND_KEYS = {"chispas", "explosion", "explosion_capa2", "fuego", "mensaje"};
+    public static final String[] SOUND_KEYS = {
+        "chispas", "explosion", "explosion_capa2", "fuego", "notificacion",
+        "carga", "musica", "suspenso_golpe", "suspenso_largo"
+    };
+    public static final String[] SOUND_HELP = {
+        "Chispa de cada fuego artificial de la intro.",
+        "Explosion final (capa 1).",
+        "Explosion final (capa 2).",
+        "Cuando aparece el fuego de pantalla.",
+        "Notificacion retro cuando sale el mensaje en el chat (suenan 3 notas subiendo).",
+        "Nota que acompana cada tanda de fuegos artificiales; sube de grave a agudo (efecto 'cargando').",
+        "Musiquita de fondo durante toda la animacion (notas de grave a agudo).",
+        "Golpes cortos del 'tan tan tan' al salir la explosion final.",
+        "El 'taaan' largo y electronico del final."
+    };
     public static final String[] SOUND_DEFAULTS = {
         "minecraft:entity.firework_rocket.blast",
         "minecraft:entity.generic.explode",
         "minecraft:entity.firework_rocket.large_blast",
         "minecraft:entity.blaze.shoot",
-        "minecraft:ui.toast.challenge_complete"
+        "minecraft:block.note_block.bit",
+        "minecraft:block.note_block.chime",
+        "minecraft:block.note_block.harp",
+        "minecraft:block.note_block.bit",
+        "minecraft:block.beacon.activate"
     };
-    public static final double[] SOUND_DEFAULT_VOLUMES = {0.35, 0.8, 0.9, 0.8, 0.7};
+    public static final double[] SOUND_DEFAULT_VOLUMES = {0.35, 0.8, 0.9, 0.8, 0.6, 0.5, 0.3, 0.9, 0.9};
     @SuppressWarnings("unchecked")
     public static final ForgeConfigSpec.ConfigValue<String>[] SOUND_IDS = new ForgeConfigSpec.ConfigValue[SOUND_COUNT];
     public static final ForgeConfigSpec.DoubleValue[] SOUND_VOLUMES = new ForgeConfigSpec.DoubleValue[SOUND_COUNT];
@@ -31,6 +49,7 @@ public final class AlertConfig {
     public static final ForgeConfigSpec.IntValue FIRE_LOWER;
     public static final ForgeConfigSpec.ConfigValue<String> FIRE_LAYOUT;
     public static final ForgeConfigSpec.DoubleValue VOLUME;
+    public static final ForgeConfigSpec.DoubleValue GLOW_INTENSITY;
 
     static {
         ForgeConfigSpec.Builder common = new ForgeConfigSpec.Builder();
@@ -52,6 +71,7 @@ public final class AlertConfig {
                 "Si el id no existe, ese sonido simplemente no suena. Para quitar un sonido pon volumen 0.");
         common.push("sonidos");
         for (int i = 0; i < SOUND_COUNT; i++) {
+            common.comment(SOUND_HELP[i]);
             common.push(SOUND_KEYS[i]);
             SOUND_IDS[i] = common.define("sonido", SOUND_DEFAULTS[i]);
             SOUND_VOLUMES[i] = common.defineInRange("volumen", SOUND_DEFAULT_VOLUMES[i], 0.0, 2.0);
@@ -73,6 +93,9 @@ public final class AlertConfig {
         VOLUME = client
                 .comment("Volumen de los sonidos de la animacion (1.0 = normal, 0 = silencio).")
                 .defineInRange("volumen", 1.0, 0.0, 2.0);
+        GLOW_INTENSITY = client
+                .comment("Intensidad del difuminado de color en el borde de la pantalla cuando sale el fuego (0 = desactivado, 0.25 = sutil, 1 = fuerte).")
+                .defineInRange("bordeIntensidad", 0.25, 0.0, 1.0);
         CLIENT_SPEC = client.build();
     }
 

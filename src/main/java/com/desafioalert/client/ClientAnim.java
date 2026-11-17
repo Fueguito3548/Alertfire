@@ -110,9 +110,27 @@ public final class ClientAnim {
         }
     }
 
+    /** Borde de color de la pantalla: nace con el fuego y se apaga cuando el mensaje del chat desaparece. */
+    private static final class Glow {
+        final AlertType type;
+        final long startNanos;
+
+        Glow(AlertType type) {
+            this.type = type;
+            this.startNanos = System.nanoTime();
+        }
+    }
+
+    /** Segundos que dura el borde: desde que sale el fuego (8.5 s) hasta que el chat oculta el mensaje (~19.2 s). */
+    private static final float GLOW_SECONDS = 10.7f;
+    private static final float GLOW_FADE_IN = 1.0f;
+    private static final float GLOW_FADE_OUT = 1.2f;
+    private static final int GLOW_STRIPS = 20;
+
     private static final ArrayDeque<Pending> QUEUE = new ArrayDeque<>();
     private static final Commands COMMANDS = new Commands();
     private static Active active;
+    private static Glow glow;
 
     private ClientAnim() {
     }
@@ -161,6 +179,7 @@ public final class ClientAnim {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) {
             active = null;
+            glow = null;
             QUEUE.clear();
             return;
         }
@@ -173,7 +192,7 @@ public final class ClientAnim {
         List<Anim.Cue> cues = current.anim.cues();
         while (current.nextCue < cues.size() && (double) cues.get(current.nextCue).time <= elapsed) {
             Anim.Cue cue = cues.get(current.nextCue);
-            play(current, cue.kind, current.nextCue);
+            play(current, cue, current.nextCue);
             current.nextCue++;
         }
         if (elapsed > (double) current.anim.duration()) {
@@ -181,22 +200,38 @@ public final class ClientAnim {
         }
     }
 
-    private static void play(Active a, Anim.CueKind kind, int index) {
+    private static void play(Active a, Anim.Cue cue, int index) {
         Minecraft mc = Minecraft.getInstance();
-        switch (kind) {
+        switch (cue.kind) {
             case SPARK:
                 // Tono ligeramente distinto en cada chispa
-                sound(a, 0, 0.8f + 0.1f * (float) ((index * 37) % 7));
+                sound(a, 0, 0.8f + 0.1f * (float) ((index * 37) % 7), 1f);
+                break;
+            case CHARGE:
+                sound(a, 5, cue.pitch, cue.gain);
+                break;
+            case MUSIC:
+                sound(a, 6, cue.pitch, cue.gain);
                 break;
             case BOOM:
-                sound(a, 1, a.type.pitch + 0.4f);
-                sound(a, 2, a.type.pitch + 0.2f);
+                sound(a, 1, a.type.pitch + 0.4f, 1f);
+                sound(a, 2, a.type.pitch + 0.2f, 1f);
+                break;
+            case HIT:
+                sound(a, 7, cue.pitch, cue.gain);
+                break;
+            case LONG:
+                sound(a, 8, cue.pitch, cue.gain);
                 break;
             case FIRE:
-                sound(a, 3, a.type.pitch);
+                sound(a, 3, a.type.pitch, 1f);
+                glow = new Glow(a.type);
+                break;
+            case BLIP:
+                sound(a, 4, cue.pitch, cue.gain);
                 break;
             case MESSAGE:
-                sound(a, 4, 1f);
+                sound(a, 4, cue.pitch, cue.gain);
                 Style style = Style.EMPTY.withColor(a.type.rgb);
                 MutableComponent line = Component.literal("[" + a.type.label + "] ")
                         .setStyle(style.withBold(true))
@@ -208,8 +243,8 @@ public final class ClientAnim {
         }
     }
 
-    private static void sound(Active a, int index, float pitch) {
-        float volume = a.soundVolumes[index] * AlertConfig.VOLUME.get().floatValue();
+    private static void sound(Active a, int index, float pitch, float gain) {
+        float volume = a.soundVolumes[index] * AlertConfig.VOLUME.get().floatValue() * gain;
         if (volume <= 0f) {
             return;
         }
@@ -221,19 +256,65 @@ public final class ClientAnim {
         Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(event, pitch, volume));
     }
 
+    /**
+     * Agrega a la lista de dibujo un difuminado de color en el borde de la pantalla:
+     * marcos concentricos cuya opacidad baja hacia el centro.
+     */
+    private static void addGlow(int width, int height) {
+        Glow g = glow;
+        if (g == null) {
+            return;
+        }
+        float u = (float) ((double) (System.nanoTime() - g.startNanos) / 1.0E9);
+        if (u > GLOW_SECONDS) {
+            glow = null;
+            return;
+        }
+        float strength = AlertConfig.GLOW_INTENSITY.get().floatValue();
+        if (strength <= 0f) {
+            return;
+        }
+        float env = Math.min(Math.min(1f, u / GLOW_FADE_IN), Math.min(1f, (GLOW_SECONDS - u) / GLOW_FADE_OUT));
+        env = env * env * (3f - 2f * env);
+
+        int band = Math.max(GLOW_STRIPS, Math.round(Math.min(width, height) * 0.14f));
+        int s = Math.max(1, band / GLOW_STRIPS);
+        for (int i = 0; i < GLOW_STRIPS; i++) {
+            float fall = 1f - (float) i / (float) GLOW_STRIPS;
+            fall = fall * fall;
+            int alpha = Math.round(255f * strength * env * fall);
+            if (alpha <= 0) {
+                continue;
+            }
+            int color = (alpha << 24) | g.type.rgb;
+            int o = i * s;
+            int innerW = width - 2 * o;
+            int innerH = height - 2 * o - 2 * s;
+            if (innerW <= 0 || innerH <= 0) {
+                break;
+            }
+            COMMANDS.rect(o, o, innerW, s, color);
+            COMMANDS.rect(o, height - o - s, innerW, s, color);
+            COMMANDS.rect(o, o + s, s, innerH, color);
+            COMMANDS.rect(width - o - s, o + s, s, innerH, color);
+        }
+    }
+
     /** Llamado por el overlay de la GUI en cada frame de render. */
     public static void render(GuiGraphics graphics, int width, int height) {
-        Active current = active;
-        if (current == null) {
-            return;
-        }
-        float t = (float) ((double) (System.nanoTime() - current.startNanos) / 1.0E9);
-        if (t > current.anim.duration()) {
-            return;
-        }
-
         COMMANDS.reset();
-        current.anim.frame(t, width, height, COMMANDS);
+        addGlow(width, height);
+
+        Active current = active;
+        if (current != null) {
+            float t = (float) ((double) (System.nanoTime() - current.startNanos) / 1.0E9);
+            if (t <= current.anim.duration()) {
+                current.anim.frame(t, width, height, COMMANDS);
+            }
+        }
+        if (COMMANDS.count == 0) {
+            return;
+        }
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -252,7 +333,7 @@ public final class ClientAnim {
                 drawRects(graphics, data, i, j);
                 i = j;
             } else {
-                if (current.fire != null) {
+                if (current != null && current.fire != null) {
                     int w = current.fire.width;
                     graphics.blit(current.fire.location,
                             data[6 * i + 2], data[6 * i + 3], data[6 * i + 4], data[6 * i + 5],

@@ -44,6 +44,9 @@ public final class Anim {
         "..D.."
     };
 
+    /** Escala mayor de 2 octavas (en semitonos). Con notePitch() va de 0.5 (grave) a 2.0 (agudo). */
+    private static final int[] SCALE = {0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23, 24};
+
     /** Destino del dibujo. Las coordenadas son pixeles de pantalla. */
     public interface Sink {
         void rect(int x, int y, int w, int h, int argb);
@@ -52,20 +55,44 @@ public final class Anim {
     }
 
     public enum CueKind {
+        /** Explosion de fuego artificial de la intro. */
         SPARK,
+        /** Explosion final. */
         BOOM,
+        /** Aparece el fuego de pantalla (y el borde de color). */
         FIRE,
-        MESSAGE
+        /** Sale el mensaje en el chat (primera nota de la notificacion). */
+        MESSAGE,
+        /** Nota de "carga": una por cada tanda de fuegos artificiales, de grave a aguda. */
+        CHARGE,
+        /** Nota de la musiquita de fondo. */
+        MUSIC,
+        /** Golpe corto del "tan tan tan taaan". */
+        HIT,
+        /** El "taaan" largo y electronico. */
+        LONG,
+        /** Notas siguientes de la notificacion retro. */
+        BLIP
     }
 
     /** Momento (en segundos) en el que debe sonar un sonido o salir el mensaje. */
     public static final class Cue implements Comparable<Cue> {
         public final float time;
         public final CueKind kind;
+        /** Tono del sonido (0.5 = una octava mas grave, 2.0 = una octava mas aguda). */
+        public final float pitch;
+        /** Multiplicador de volumen. */
+        public final float gain;
 
         Cue(float time, CueKind kind) {
+            this(time, kind, 1f, 1f);
+        }
+
+        Cue(float time, CueKind kind, float pitch, float gain) {
             this.time = time;
             this.kind = kind;
+            this.pitch = pitch;
+            this.gain = gain;
         }
 
         @Override
@@ -134,6 +161,8 @@ public final class Anim {
                         18 + rng.nextInt(9), 6.0f, 11.0f, 0.75f, 26.0f, 2.5f, 1.6f);
                 cues.add(new Cue(t, CueKind.SPARK));
             }
+            // Nota de "carga": sube de grave a agudo a medida que avanza la intro.
+            cues.add(new Cue(t, CueKind.CHARGE, notePitch((int) (t / 7.3f * 14f)), 1f));
             gap = Math.max(0.1f, gap * 0.9f);
             t += gap;
         }
@@ -145,6 +174,30 @@ public final class Anim {
         cues.add(new Cue(7.5f, CueKind.BOOM));
         cues.add(new Cue(8.5f, CueKind.FIRE));
         cues.add(new Cue(9.2f, CueKind.MESSAGE));
+
+        // "Tan tan tan taaan": tres golpes electronicos y uno largo, al salir la explosion final.
+        cues.add(new Cue(7.5f, CueKind.HIT, 0.63f, 1f));
+        cues.add(new Cue(7.78f, CueKind.HIT, 0.63f, 1f));
+        cues.add(new Cue(8.06f, CueKind.HIT, 0.63f, 1f));
+        cues.add(new Cue(8.34f, CueKind.LONG, 0.5f, 1f));
+
+        // Notificacion retro (3 notas subiendo, ~1 s) cuando sale el mensaje.
+        cues.add(new Cue(9.3f, CueKind.BLIP, 1.498f, 1f));
+        cues.add(new Cue(9.4f, CueKind.BLIP, 2.0f, 1f));
+
+        // Musiquita de fondo. Intro: arpegio que sube de grave a agudo (sensacion de "cargando").
+        int[] arp = {0, 2, 4, 2};
+        int beat = 0;
+        for (float mt = 0f; mt < 7.3f; mt += 0.2f) {
+            int base = (int) (mt / 7.3f * 10f);
+            cues.add(new Cue(mt, CueKind.MUSIC, notePitch(base + arp[beat % 4]), 1f));
+            beat++;
+        }
+        // Despues de la explosion: notas agudas mas calmadas que se van apagando.
+        int[] calm = {14, 11, 9, 11};
+        for (int i = 0; i < 12; i++) {
+            cues.add(new Cue(8.0f + i * 0.45f, CueKind.MUSIC, notePitch(calm[i % 4]), 0.8f * (1f - i / 12f)));
+        }
         Collections.sort(cues);
 
         // Brasas que suben desde el fuego.
@@ -376,6 +429,12 @@ public final class Anim {
                 sink.rect(cx - hw, cy + Math.round(yy), 2 * hw, step, color);
             }
         }
+    }
+
+    /** Tono (0.5 .. 2.0) del escalon i de la escala. */
+    private static float notePitch(int step) {
+        int i = Math.max(0, Math.min(SCALE.length - 1, step));
+        return 0.5f * (float) Math.pow(2.0, SCALE[i] / 12.0);
     }
 
     private static float uni(Random rng, float min, float max) {
